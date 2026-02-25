@@ -2,11 +2,10 @@
  * Wynncraft Lootrunning - Boons
  * Source: https://wynncraft.wiki.gg/wiki/Lootrunning
  *
- * Boons are beneficial effects offered when you complete a Blue Beacon challenge.
- * Dynamic Boons have ongoing effects; Static Boons give an immediate buff
- * based on your progress so far.
+ * Dynamic Boons trigger on an ongoing condition for the rest of the run.
+ * Static Boons give an immediate one-time buff scaled to your current progress.
  *
- * Most stackable boons have a maximum cap.
+ * maxStacks: null = N/A (no stated cap or non-stacking)
  */
 
 export const boonTypes = {
@@ -15,276 +14,241 @@ export const boonTypes = {
 };
 
 export const boons = [
-  // --- Loot Boons ---
+  // ── Dynamic Boons ────────────────────────────────────────────────────────
+
+  // Beacon-triggered
   {
-    id: "loot_bonus",
-    name: "Loot Bonus",
+    id: "persnickety",
+    name: "Persnickety",
     type: boonTypes.DYNAMIC,
-    category: "loot",
-    effect: "+Loot Bonus%",
+    category: "beacon",
+    effect: "Gain [+effect] once offered a Blue/Purple Beacon >10 times",
     description:
-      "Increases Loot Bonus, improving the quantity of items found in chests during the lootrun.",
-    stackable: true,
-    priority: "high",
-    notes:
-      "One of the most prioritized boons for flying chest runs. Does not affect the End Reward Chest.",
+      "Once you've been offered a Blue or Purple Beacon more than 10 times this Lootrun, gain [+effect].",
+    maxStacks: null,
+    stackable: false,
+    priority: "low",
   },
   {
-    id: "loot_quality",
-    name: "Loot Quality",
+    id: "picky_looter",
+    name: "Picky Looter",
     type: boonTypes.DYNAMIC,
-    category: "loot",
-    effect: "+Loot Quality%",
+    category: "beacon",
+    effect: "Gain [+effect] every time you are offered a Yellow Beacon",
     description:
-      "Increases Loot Quality, improving the rarity of items found in chests during the lootrun.",
+      "For the rest of your Lootrun, gain [+effect] everytime you get offered a Yellow Beacon.",
+    maxStacks: 15,
+    stackable: true,
+    priority: "medium",
+  },
+  {
+    id: "heavensent",
+    name: "Heavensent",
+    type: boonTypes.DYNAMIC,
+    category: "beacon",
+    effect: "Gain [+effect] for each Beacon offered",
+    description:
+      "For the rest of your Lootrun, gain [+effect] for each Beacon offered.",
+    maxStacks: 15,
     stackable: true,
     priority: "high",
-    notes:
-      "Highly prioritized for Mythic farming. Does not affect the End Reward Chest.",
   },
 
-  // --- Mobility Boons ---
+  // Timer-triggered
+  {
+    id: "slowrunner",
+    name: "Slowrunner",
+    type: boonTypes.DYNAMIC,
+    category: "timer",
+    effect: "Gain [+effect] when less than 6m is left on the timer",
+    description:
+      "For the rest of your Lootrun, gain [+effect] when less than 6m is left on the timer.",
+    maxStacks: null,
+    stackable: false,
+    priority: "low",
+  },
+  {
+    id: "clockworker",
+    name: "Clockworker",
+    type: boonTypes.DYNAMIC,
+    category: "timer",
+    effect: "Gain [+effect] for every minute left on the timer",
+    description:
+      "For the rest of your Lootrun, gain [+effect] for every minute left on the timer.",
+    maxStacks: 15,
+    stackable: true,
+    priority: "medium",
+  },
+
+  // Chest/item-triggered
   {
     id: "looter",
     name: "Looter",
     type: boonTypes.DYNAMIC,
-    category: "mobility",
-    effect: "+10% Walk Speed per 4 items found in chests (max +150%)",
+    category: "chest",
+    effect: "Gain [+effect] for every 4 items offered from a Chest",
     description:
-      "A dynamic boon that provides +10% Walk Speed for every four items found in chests throughout the lootrun.",
+      "For the rest of your Lootrun, gain [+effect] for every 4 items offered to you from a Chest.",
+    maxStacks: 15,
+    stackable: true,
+    priority: "high",
+  },
+  {
+    id: "serendipity",
+    name: "Serendipity",
+    type: boonTypes.DYNAMIC,
+    category: "chest",
+    effect: "Gain [+effect] every time you open a Chest",
+    description:
+      "For the rest of your Lootrun, gain [+effect] everytime you open a Chest.",
+    maxStacks: 15,
+    stackable: true,
+    priority: "high",
+  },
+
+  // Curse-triggered
+  {
+    id: "bad_omen",
+    name: "Bad Omen",
+    type: boonTypes.DYNAMIC,
+    category: "curse",
+    effect: "Gain [+effect] every time you get a Curse",
+    description:
+      "For the rest of your Lootrun, gain [+effect] everytime you get a Curse.",
+    maxStacks: 8,
+    stackable: true,
+    priority: "medium",
+  },
+
+  // Boon-triggered
+  {
+    id: "midas_touch",
+    name: "Midas Touch",
+    type: boonTypes.DYNAMIC,
+    category: "boon",
+    effect: "Gain [+effect] every time you get a Boon",
+    description:
+      "For the rest of your Lootrun, gain [+effect] everytime you get a Boon.",
+    maxStacks: 8,
+    stackable: true,
+    priority: "medium",
+  },
+
+  // Kill-triggered
+  {
+    id: "killstreak",
+    name: "Killstreak",
+    type: boonTypes.DYNAMIC,
+    category: "kill",
+    effect: "Gain [+effect] for 60s every time you kill 5 Mobs (resets per kill)",
+    description:
+      "For the rest of your Lootrun, gain [+effect] for 60s everytime you kill 5 Mobs. Duration resets after every kill.",
+    maxStacks: null,
     stackable: false,
-    maxValue: "+150% Walk Speed",
     priority: "medium",
-    notes:
-      "Caps at +150% Walk Speed regardless of how many items you find beyond 60.",
-  },
-  {
-    id: "walk_speed",
-    name: "Walk Speed",
-    type: boonTypes.DYNAMIC,
-    category: "mobility",
-    effect: "+Walk Speed%",
-    description: "Provides a flat bonus to Walk Speed for the rest of the run.",
-    stackable: true,
-    priority: "low",
   },
 
-  // --- Combat Boons ---
+  // Challenge-triggered
   {
-    id: "spell_damage",
-    name: "Spell Damage",
+    id: "persistent_champion",
+    name: "Persistent Champion",
     type: boonTypes.DYNAMIC,
-    category: "combat",
-    effect: "+Spell Damage%",
-    description: "Increases Spell Damage dealt to enemies.",
+    category: "challenge",
+    effect: "Gain [+effect] every time you complete a Challenge",
+    description:
+      "For the rest of your Lootrun, gain [+effect] everytime you complete a Challenge.",
+    maxStacks: 15,
     stackable: true,
     priority: "high",
-    notes: "Becomes essential after ~80 challenges to keep up with mob scaling.",
   },
   {
-    id: "dexterity",
-    name: "Dexterity",
+    id: "patient_champion",
+    name: "Patient Champion",
     type: boonTypes.DYNAMIC,
-    category: "combat",
-    effect: "+Dexterity skill points",
+    category: "challenge",
+    effect: "Gain [+effect] once you reach 20 Challenges completed",
     description:
-      "Grants bonus Dexterity skill points, increasing critical hit chance and damage.",
-    stackable: true,
-    priority: "high",
-    notes:
-      "Required to scale efficiently past ~80 challenges alongside critical damage boons.",
-  },
-  {
-    id: "critical_damage",
-    name: "Critical Damage",
-    type: boonTypes.DYNAMIC,
-    category: "combat",
-    effect: "+Critical Damage%",
-    description: "Increases the damage dealt by critical hits.",
-    stackable: true,
-    priority: "high",
-    notes: "Required alongside Dexterity boons for scaling past ~80 challenges.",
-  },
-
-  // --- Survivability Boons ---
-  {
-    id: "health_bonus",
-    name: "Health Bonus",
-    type: boonTypes.DYNAMIC,
-    category: "survivability",
-    effect: "+Health Bonus",
-    description: "Increases your maximum health for the rest of the run.",
-    stackable: true,
-    priority: "medium",
-  },
-  {
-    id: "life_steal",
-    name: "Life Steal",
-    type: boonTypes.DYNAMIC,
-    category: "survivability",
-    effect: "+Life Steal",
-    description:
-      "Increases Life Steal, recovering health based on damage dealt.",
-    stackable: true,
-    priority: "medium",
-  },
-  {
-    id: "hp_regen",
-    name: "HP Regen",
-    type: boonTypes.DYNAMIC,
-    category: "survivability",
-    effect: "+HP Regen%",
-    description: "Increases health regeneration rate.",
-    stackable: true,
-    priority: "high",
-    notes:
-      "Prioritize for Mage builds or builds that passively bleed health. Take until you stop bleeding passively.",
-  },
-
-  // --- Mana Boons ---
-  {
-    id: "mana_regen",
-    name: "Mana Regen",
-    type: boonTypes.DYNAMIC,
-    category: "mana",
-    effect: "+Mana Regen",
-    description: "Increases the rate at which mana regenerates.",
-    stackable: true,
-    priority: "medium",
-  },
-  {
-    id: "mana_steal",
-    name: "Mana Steal",
-    type: boonTypes.DYNAMIC,
-    category: "mana",
-    effect: "+Mana Steal",
-    description: "Steals mana from enemies when hitting them.",
-    stackable: true,
-    priority: "medium",
-  },
-  {
-    id: "max_mana",
-    name: "Max Mana",
-    type: boonTypes.DYNAMIC,
-    category: "mana",
-    effect: "+Max Mana",
-    description: "Increases your maximum mana pool.",
-    stackable: true,
-    priority: "low",
-  },
-
-  // --- Debuff Boons (applied to enemies) ---
-  {
-    id: "enemy_slowness",
-    name: "Enemy Slowness",
-    type: boonTypes.DYNAMIC,
-    category: "debuff",
-    effect: "+Enemy Slowness%",
-    description: "Slows down enemies, making them easier to avoid and fight.",
-    stackable: true,
-    priority: "medium",
-  },
-  {
-    id: "enemy_weakness",
-    name: "Enemy Weakness",
-    type: boonTypes.DYNAMIC,
-    category: "debuff",
-    effect: "+Enemy Weakness%",
-    description:
-      "Applies weakness to enemies, causing them to take more damage.",
-    stackable: true,
+      "Once you reach 20 Challenges completed during your Lootrun, gain [+effect].",
+    maxStacks: null,
+    stackable: false,
     priority: "medium",
   },
 
-  // --- Skill Point Boons ---
-  {
-    id: "strength",
-    name: "Strength",
-    type: boonTypes.DYNAMIC,
-    category: "skill_points",
-    effect: "+Strength skill points",
-    description: "Grants bonus Strength skill points.",
-    stackable: true,
-    priority: "low",
-  },
-  {
-    id: "agility",
-    name: "Agility",
-    type: boonTypes.DYNAMIC,
-    category: "skill_points",
-    effect: "+Agility skill points",
-    description: "Grants bonus Agility skill points, increasing dodge chance.",
-    stackable: true,
-    priority: "low",
-  },
-  {
-    id: "intelligence",
-    name: "Intelligence",
-    type: boonTypes.DYNAMIC,
-    category: "skill_points",
-    effect: "+Intelligence skill points",
-    description:
-      "Grants bonus Intelligence skill points, improving mana-related stats.",
-    stackable: true,
-    priority: "low",
-  },
-  {
-    id: "defense",
-    name: "Defense",
-    type: boonTypes.DYNAMIC,
-    category: "skill_points",
-    effect: "+Defense skill points",
-    description:
-      "Grants bonus Defense skill points, increasing resistance to damage.",
-    stackable: true,
-    priority: "low",
-  },
+  // ── Static Boons ─────────────────────────────────────────────────────────
 
-  // --- Static Boons ---
   {
-    id: "curse_scaling_static",
-    name: "Curse Harvest",
+    id: "parsimonious",
+    name: "Parsimonious",
     type: boonTypes.STATIC,
     category: "static",
-    effect: "Massive buff scaling with current number of Curses (up to 8)",
+    effect: "Immediately gain [+effect] per 4 items offered from Chests this run",
     description:
-      "A static boon that provides an immediate, powerful buff based on the number of active Curses. Scales up to 8 curses for maximum effect.",
-    stackable: false,
+      "This time only, immediately gain [+effect] for every 4 items offered to you from Chests this Lootrun.",
+    maxStacks: 15,
+    stackable: true,
+    priority: "medium",
+  },
+  {
+    id: "madman",
+    name: "Madman",
+    type: boonTypes.STATIC,
+    category: "static",
+    effect: "Immediately gain [+effect] per Curse you currently have",
+    description:
+      "This time only, immediately gain [+effect] for every Curse you currently have.",
+    maxStacks: 8,
+    stackable: true,
     priority: "highest",
-    notes:
-      "The highest-value static boon available. Try to have at least 8 curses active when you take it. Best taken after completing your White Beacon.",
+    notes: "Best taken when you have as many active Curses as possible (up to 8).",
+  },
+  {
+    id: "lightbringer",
+    name: "Lightbringer",
+    type: boonTypes.STATIC,
+    category: "static",
+    effect: "Immediately gain [+effect] per Boon you currently have",
+    description:
+      "This time only, immediately gain [+effect] for every Boon you currently have.",
+    maxStacks: 6,
+    stackable: true,
+    priority: "high",
+    notes: "Best taken late in the run once you've accumulated many Boons.",
+  },
+  {
+    id: "mob_slaughter",
+    name: "Mob Slaughter",
+    type: boonTypes.STATIC,
+    category: "static",
+    effect: "Immediately gain [+effect] per 10 Mobs killed this run",
+    description:
+      "This time only, immediately gain [+effect] for every 10 Mobs killed this Lootrun.",
+    maxStacks: 15,
+    stackable: true,
+    priority: "medium",
+  },
+  {
+    id: "retrograde_champion",
+    name: "Retrograde Champion",
+    type: boonTypes.STATIC,
+    category: "static",
+    effect: "Immediately gain [+effect] per Challenge completed this run",
+    description:
+      "This time only, immediately gain [+effect] for every Challenge completed during this Lootrun.",
+    maxStacks: 15,
+    stackable: true,
+    priority: "medium",
   },
 ];
 
 export const boonCategories = [
-  { id: "loot", label: "Loot", description: "Improves items found in chests" },
-  {
-    id: "combat",
-    label: "Combat",
-    description: "Increases damage output and combat effectiveness",
-  },
-  {
-    id: "survivability",
-    label: "Survivability",
-    description: "Improves health and sustain",
-  },
-  { id: "mana", label: "Mana", description: "Improves mana management" },
-  { id: "mobility", label: "Mobility", description: "Increases movement speed" },
-  {
-    id: "debuff",
-    label: "Enemy Debuffs",
-    description: "Applies negative effects to enemies",
-  },
-  {
-    id: "skill_points",
-    label: "Skill Points",
-    description: "Grants bonus skill point allocations",
-  },
-  {
-    id: "static",
-    label: "Static",
-    description: "One-time immediate buffs based on run progress",
-  },
+  { id: "beacon", label: "Beacon", description: "Triggered by Beacon offers" },
+  { id: "chest", label: "Chest", description: "Triggered by opening Chests or finding items" },
+  { id: "challenge", label: "Challenge", description: "Triggered by completing Challenges" },
+  { id: "curse", label: "Curse", description: "Triggered by gaining Curses" },
+  { id: "boon", label: "Boon", description: "Triggered by gaining Boons" },
+  { id: "kill", label: "Kill", description: "Triggered by killing Mobs" },
+  { id: "timer", label: "Timer", description: "Triggered by the run timer" },
+  { id: "static", label: "Static", description: "Immediate one-time buffs" },
 ];
 
 export default boons;

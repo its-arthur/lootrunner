@@ -396,9 +396,9 @@ export default function Home() {
                       <Badge className="border-slate-700 text-slate-500">
                         {boon.type}
                       </Badge>
-                      {boon.stackable && (
+                      {boon.maxStacks != null && (
                         <Badge className="border-slate-700 text-slate-500">
-                          stackable
+                          max ×{boon.maxStacks}
                         </Badge>
                       )}
                     </div>
