@@ -59,32 +59,6 @@ function gamePriorityLabel(priority: string): string {
   }
 }
 
-function tierStyle(tier: string): string {
-  switch (tier) {
-    case "S":
-      return "text-amber-300 border-amber-700 bg-amber-950/50";
-    case "A":
-      return "text-orange-300 border-orange-700 bg-orange-950/50";
-    case "B":
-      return "text-blue-300 border-blue-700 bg-blue-950/50";
-    default:
-      return "text-slate-400 border-slate-700 bg-slate-800/40";
-  }
-}
-
-function comboLabel(id: string): string {
-  switch (id) {
-    case "flying_chests":
-      return "🟡 Flying Chests";
-    case "curse_stacking":
-      return "🟣 Curse Stacking";
-    case "beacon_reroll":
-      return "🟠 Beacon Reroll";
-    default:
-      return id;
-  }
-}
-
 function downloadJson(data: SaveData) {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json",
@@ -208,8 +182,6 @@ export default function Home() {
 
   // Filters
   const [boonFilter, setBoonFilter] = useState("all");
-  const [missionTierFilter, setMissionTierFilter] = useState("all");
-  const [missionComboFilter, setMissionComboFilter] = useState("all");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -268,14 +240,7 @@ export default function Home() {
       ? boonList
       : boonList.filter((b) => b.category === boonFilter);
 
-  const visibleMissions = missionList.filter((m) => {
-    const tierOk =
-      missionTierFilter === "all" || m.tier === missionTierFilter;
-    const comboOk =
-      missionComboFilter === "all" ||
-      (Array.isArray(m.combo) && m.combo.includes(missionComboFilter));
-    return tierOk && comboOk;
-  });
+  const visibleMissions = missionList;
 
   const visibleStats =
     statFilter === "all"
@@ -586,139 +551,49 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-slate-600">Tier</span>
-                {["all", "S", "A", "B", "C"].map((t) => (
-                  <FilterPill
-                    key={t}
-                    active={missionTierFilter === t}
-                    onClick={() => setMissionTierFilter(t)}
-                  >
-                    {t === "all" ? "All" : t}
-                  </FilterPill>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-slate-600">Combo</span>
-                {[
-                  { id: "all", label: "All" },
-                  { id: "flying_chests", label: "🟡 Flying Chests" },
-                  { id: "curse_stacking", label: "🟣 Curse Stacking" },
-                  { id: "beacon_reroll", label: "🟠 Beacon Reroll" },
-                ].map(({ id, label }) => (
-                  <FilterPill
-                    key={id}
-                    active={missionComboFilter === id}
-                    onClick={() => setMissionComboFilter(id)}
-                  >
-                    {label}
-                  </FilterPill>
-                ))}
-              </div>
-            </div>
-
-            {/* Sections by tier */}
+            {/* Grid — wiki only has Name + Reward Effect */}
             {visibleMissions.length === 0 ? (
-              <EmptyState message="No missions match the current filters." />
+              <EmptyState message="No missions loaded." />
             ) : (
-              ["S", "A", "B", "C"]
-                .filter(
-                  (tier) =>
-                    missionTierFilter === "all" || missionTierFilter === tier
-                )
-                .map((tier) => {
-                  const missionsInTier = visibleMissions.filter(
-                    (m) => m.tier === tier
-                  );
-                  if (missionsInTier.length === 0) return null;
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleMissions.map((mission) => {
+                  const r = rank(mission.id, selectedMissions);
+                  const selected = r > 0;
                   return (
-                    <section key={tier} className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                          Tier {tier}
-                        </h3>
-                        <span className="h-px flex-1 bg-slate-800" />
-                        <span className="text-xs text-slate-600">
-                          {missionsInTier.length} missions
+                    <button
+                      key={mission.id}
+                      onClick={() =>
+                        toggle(
+                          mission.id,
+                          selectedMissions,
+                          setSelectedMissions
+                        )
+                      }
+                      className={`group relative text-left rounded-lg border p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
+                        selected
+                          ? "border-slate-500 bg-slate-800/70 shadow-sm"
+                          : "border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/40"
+                      }`}
+                    >
+                      {selected && (
+                        <div className="absolute right-3 top-3">
+                          <SelectionBadge n={r} />
+                        </div>
+                      )}
+                      <div
+                        className={`mb-2 ${selected ? "pr-7" : ""}`}
+                      >
+                        <span className={`text-sm font-semibold leading-snug ${mission.nameColor ?? "text-slate-100"}`}>
+                          {mission.name}
                         </span>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        {missionsInTier.map((mission) => {
-                          const r = rank(mission.id, selectedMissions);
-                          const selected = r > 0;
-                          return (
-                            <button
-                              key={mission.id}
-                              onClick={() =>
-                                toggle(
-                                  mission.id,
-                                  selectedMissions,
-                                  setSelectedMissions
-                                )
-                              }
-                              className={`group relative text-left rounded-lg border p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
-                                selected
-                                  ? "border-slate-500 bg-slate-800/70 shadow-sm"
-                                  : "border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/40"
-                              }`}
-                            >
-                              {selected && (
-                                <div className="absolute right-3 top-3">
-                                  <SelectionBadge n={r} />
-                                </div>
-                              )}
-                              <div
-                                className={`mb-2 flex items-start gap-2 ${selected ? "pr-7" : ""}`}
-                              >
-                                <span className="flex-1 text-sm font-semibold leading-snug text-slate-100">
-                                  {mission.name}
-                                </span>
-                                <Badge className={tierStyle(mission.tier)}>
-                                  {mission.tier}
-                                </Badge>
-                              </div>
-                              <p className="mb-1.5 text-xs font-medium leading-relaxed text-slate-300">
-                                {mission.effect}
-                              </p>
-                              <p className="mb-2 text-xs leading-relaxed text-slate-500">
-                                {mission.description}
-                              </p>
-                              {Array.isArray(mission.combo) &&
-                                mission.combo.length > 0 && (
-                                  <div className="mb-2 flex flex-wrap gap-1">
-                                    {mission.combo.map((c: string) => (
-                                      <Badge
-                                        key={c}
-                                        className="border-slate-700 text-slate-400"
-                                      >
-                                        {comboLabel(c)}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                              {mission.tips && mission.tips.length > 0 && (
-                                <ul className="space-y-1">
-                                  {mission.tips
-                                    .slice(0, 2)
-                                    .map((tip: string, i: number) => (
-                                      <li
-                                        key={i}
-                                        className="text-xs text-amber-500/75"
-                                      >
-                                        · {tip}
-                                      </li>
-                                    ))}
-                                </ul>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </section>
+                      <p className="text-xs font-medium leading-relaxed text-slate-300">
+                        {mission.effect}
+                      </p>
+                    </button>
                   );
-                })
+                })}
+              </div>
             )}
           </div>
         )}
@@ -933,8 +808,7 @@ export default function Home() {
                                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--accent)] font-mono text-[10px] font-semibold text-[var(--foreground)]">
                                   {idx + 1}
                                 </span>
-                                <span className="min-w-0 flex-1 truncate font-medium text-[var(--foreground)]">{m.name}</span>
-                                <Badge className={tierStyle(m.tier)}>{m.tier}</Badge>
+                                <span className={`min-w-0 flex-1 truncate font-medium ${m.nameColor ?? "text-[var(--foreground)]"}`}>{m.name}</span>
                               </div>
                             </OverviewItemCard>
                           </li>
