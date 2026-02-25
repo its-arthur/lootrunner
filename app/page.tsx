@@ -1,123 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { boons, boonCategories } from "@/data/boons";
 import { beacons } from "@/data/beacons";
 import { missions } from "@/data/missions";
 
-type Tab = "quickpick" | "boons" | "beacons" | "missions";
-type FocusId = "flying_chests" | "curse_stacking" | "beacon_reroll";
-
-const focusConfig: Record<
-  FocusId,
-  {
-    label: string;
-    emoji: string;
-    description: string;
-    boonIds: string[];
-    beaconIds: string[];
-    missionIds: string[];
-    tip: string;
-  }
-> = {
-  flying_chests: {
-    label: "Flying Chests",
-    emoji: "🟡",
-    description:
-      "Farm flying chests for Mythic items. Maximize loot from every chest.",
-    boonIds: [
-      "loot_bonus",
-      "loot_quality",
-      "looter",
-      "hp_regen",
-      "spell_damage",
-    ],
-    beaconIds: ["yellow", "grey", "blue", "aqua", "orange", "white"],
-    missionIds: [
-      "jesters_trick",
-      "interest_scheme",
-      "hoarder",
-      "orphions_grace",
-      "cleansing_ritual",
-      "materialism",
-    ],
-    tip: "If Jester's Trick, Interest Scheme, or Hoarder don't appear in your first mission offers, consider restarting (/kill).",
-  },
-  curse_stacking: {
-    label: "Curse Stacking",
-    emoji: "🟣",
-    description:
-      "Intentionally accumulate 8+ Curses to power up the Curse Harvest static boon.",
-    boonIds: [
-      "curse_scaling_static",
-      "life_steal",
-      "hp_regen",
-      "health_bonus",
-      "spell_damage",
-      "dexterity",
-    ],
-    beaconIds: ["purple", "dark_grey", "grey", "blue", "green"],
-    missionIds: [
-      "equilibrium",
-      "porphyrophobia",
-      "cleansing_ritual",
-      "high_roller",
-      "redemption",
-      "inner_peace",
-    ],
-    tip: "Stack 8+ Curses before taking the Curse Harvest static boon. Cleansing Ritual lets you safely manage Curse count.",
-  },
-  beacon_reroll: {
-    label: "Beacon Reroll Spam",
-    emoji: "🟠",
-    description:
-      "Maximize beacon choices and rerolls. Always Aqua-boost Grey Beacons.",
-    boonIds: [
-      "loot_bonus",
-      "loot_quality",
-      "spell_damage",
-      "walk_speed",
-      "dexterity",
-    ],
-    beaconIds: ["orange", "grey", "aqua", "green", "blue", "white"],
-    missionIds: [
-      "gourmand",
-      "optimism",
-      "backup_beat",
-      "thrill_seeker",
-      "orphions_grace",
-      "cleansing_ritual",
-    ],
-    tip: "Always Aqua-boost Grey Beacons. Four beacon choices (+2 from Orange) is optimal.",
-  },
-};
-
-function priorityBadge(priority: string) {
-  switch (priority) {
-    case "highest":
-      return "bg-red-500 text-white";
-    case "high":
-      return "bg-orange-500 text-white";
-    case "medium":
-      return "bg-yellow-500 text-black";
-    default:
-      return "bg-zinc-600 text-zinc-200";
-  }
-}
-
-function tierBadge(tier: string) {
-  switch (tier) {
-    case "S":
-      return "bg-amber-400 text-black";
-    case "A":
-      return "bg-orange-500 text-white";
-    case "B":
-      return "bg-blue-500 text-white";
-    default:
-      return "bg-zinc-600 text-zinc-200";
-  }
-}
-
+// ── Type casts for JS data ────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const boonList = boons as any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,501 +15,798 @@ const missionList = missions as any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const categoryList = boonCategories as any[];
 
+type Tab = "boons" | "beacons" | "missions" | "overview";
+
+// ── Persistence format ────────────────────────────────────────────────────────
+interface SaveData {
+  version: 1;
+  exportedAt: string;
+  boons: string[];
+  beacons: string[];
+  missions: string[];
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function gamePriorityStyle(priority: string): string {
+  switch (priority) {
+    case "highest":
+      return "text-red-400 border-red-800 bg-red-950/40";
+    case "high":
+      return "text-orange-400 border-orange-800 bg-orange-950/40";
+    case "medium":
+      return "text-yellow-400 border-yellow-800 bg-yellow-950/40";
+    default:
+      return "text-slate-400 border-slate-700 bg-slate-800/40";
+  }
+}
+
+function gamePriorityLabel(priority: string): string {
+  switch (priority) {
+    case "highest":
+      return "Highest";
+    case "high":
+      return "High";
+    case "medium":
+      return "Medium";
+    default:
+      return "Low";
+  }
+}
+
+function tierStyle(tier: string): string {
+  switch (tier) {
+    case "S":
+      return "text-amber-300 border-amber-700 bg-amber-950/50";
+    case "A":
+      return "text-orange-300 border-orange-700 bg-orange-950/50";
+    case "B":
+      return "text-blue-300 border-blue-700 bg-blue-950/50";
+    default:
+      return "text-slate-400 border-slate-700 bg-slate-800/40";
+  }
+}
+
+function comboLabel(id: string): string {
+  switch (id) {
+    case "flying_chests":
+      return "🟡 Flying Chests";
+    case "curse_stacking":
+      return "🟣 Curse Stacking";
+    case "beacon_reroll":
+      return "🟠 Beacon Reroll";
+    default:
+      return id;
+  }
+}
+
+function downloadJson(data: SaveData) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `lootrunner-${new Date().toISOString().split("T")[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Shared atoms ──────────────────────────────────────────────────────────────
+
+function Badge({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SelectionBadge({ n }: { n: number }) {
+  return (
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-900">
+      {n}
+    </span>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+        active
+          ? "border-slate-400 bg-slate-700 text-slate-100"
+          : "border-slate-700 bg-transparent text-slate-400 hover:border-slate-500 hover:text-slate-200"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-800 py-10 text-center">
+      <p className="text-sm text-slate-500">{message}</p>
+    </div>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>("quickpick");
-  const [selectedFocus, setSelectedFocus] = useState<FocusId | null>(null);
-  const [selectedBoons, setSelectedBoons] = useState<Set<string>>(new Set());
-  const [selectedBeacons, setSelectedBeacons] = useState<Set<string>>(
-    new Set()
-  );
-  const [selectedMissions, setSelectedMissions] = useState<Set<string>>(
-    new Set()
-  );
+  const [activeTab, setActiveTab] = useState<Tab>("boons");
+
+  // Ordered arrays — index 0 = priority 1
+  const [selectedBoons, setSelectedBoons] = useState<string[]>([]);
+  const [selectedBeacons, setSelectedBeacons] = useState<string[]>([]);
+  const [selectedMissions, setSelectedMissions] = useState<string[]>([]);
+
+  // Filters
   const [boonFilter, setBoonFilter] = useState("all");
   const [missionTierFilter, setMissionTierFilter] = useState("all");
   const [missionComboFilter, setMissionComboFilter] = useState("all");
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Selection helpers ─────────────────────────────────────────────────────
   function toggle(
     id: string,
-    set: Set<string>,
-    setter: (s: Set<string>) => void
+    list: string[],
+    setter: React.Dispatch<React.SetStateAction<string[]>>
   ) {
-    const next = new Set(set);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setter(next);
+    setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   }
 
-  function applyFocus(focusId: FocusId) {
-    const cfg = focusConfig[focusId];
-    setSelectedFocus(focusId);
-    setSelectedBoons(new Set(cfg.boonIds));
-    setSelectedBeacons(new Set(cfg.beaconIds));
-    setSelectedMissions(new Set(cfg.missionIds));
+  function rank(id: string, list: string[]): number {
+    const i = list.indexOf(id);
+    return i === -1 ? 0 : i + 1;
   }
 
-  const filteredBoons =
+  // ── Import / Export ───────────────────────────────────────────────────────
+  function handleExport() {
+    downloadJson({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      boons: selectedBoons,
+      beacons: selectedBeacons,
+      missions: selectedMissions,
+    });
+  }
+
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = JSON.parse(evt.target?.result as string) as SaveData;
+        if (data.version === 1) {
+          setSelectedBoons(Array.isArray(data.boons) ? data.boons : []);
+          setSelectedBeacons(Array.isArray(data.beacons) ? data.beacons : []);
+          setSelectedMissions(Array.isArray(data.missions) ? data.missions : []);
+        }
+      } catch {
+        alert("Could not parse file — make sure it's a valid Lootrunner JSON.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  // ── Derived lists ─────────────────────────────────────────────────────────
+  const visibleBoons =
     boonFilter === "all"
       ? boonList
       : boonList.filter((b) => b.category === boonFilter);
 
-  const filteredMissions = missionList.filter((m) => {
-    const tierOk = missionTierFilter === "all" || m.tier === missionTierFilter;
+  const visibleMissions = missionList.filter((m) => {
+    const tierOk =
+      missionTierFilter === "all" || m.tier === missionTierFilter;
     const comboOk =
       missionComboFilter === "all" ||
-      (m.combo && m.combo.includes(missionComboFilter));
+      (Array.isArray(m.combo) && m.combo.includes(missionComboFilter));
     return tierOk && comboOk;
   });
 
-  const tabs = [
-    { id: "quickpick" as Tab, label: "⚡ Quick Pick" },
-    { id: "boons" as Tab, label: "✨ Boons" },
-    { id: "beacons" as Tab, label: "🔮 Beacons" },
-    { id: "missions" as Tab, label: "📋 Missions" },
+  // ── Tabs config ───────────────────────────────────────────────────────────
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: "boons", label: "Boons", count: selectedBoons.length },
+    { id: "beacons", label: "Beacons", count: selectedBeacons.length },
+    { id: "missions", label: "Missions", count: selectedMissions.length },
+    { id: "overview", label: "Overview" },
   ];
 
+  const totalSelected =
+    selectedBoons.length + selectedBeacons.length + selectedMissions.length;
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Header */}
-      <header className="border-b border-zinc-800 bg-zinc-900 px-6 py-4">
-        <div className="mx-auto max-w-6xl">
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            ⚔️ Lootrunner
-          </h1>
-          <p className="text-sm text-zinc-400">
-            Wynncraft Lootrunning Companion
-          </p>
+    <div className="min-h-screen bg-[#020817]">
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-20 border-b border-slate-800 bg-[#020817]/95 backdrop-blur-sm">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex h-14 items-center justify-between gap-4">
+            {/* Brand */}
+            <div className="flex items-center gap-2">
+              <span className="text-base font-semibold text-slate-100">
+                Lootrunner
+              </span>
+              <span className="hidden rounded-full border border-slate-700 px-2 py-0.5 text-xs text-slate-500 sm:inline">
+                Wynncraft
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImport}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+              >
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M8 2v9M4 7l4 4 4-4M2 13h12" />
+                </svg>
+                Import
+              </button>
+              <button
+                onClick={handleExport}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700"
+              >
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M8 11V2M4 6l4-4 4 4M2 13h12" />
+                </svg>
+                Export
+              </button>
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="-mb-px flex gap-0">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none ${
+                  activeTab === tab.id
+                    ? "text-slate-100 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-slate-100"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                {tab.label}
+                {typeof tab.count === "number" && tab.count > 0 && (
+                  <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-slate-700 px-1 text-[10px] font-semibold text-slate-300">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
-      {/* Tab bar */}
-      <nav className="border-b border-zinc-800 bg-zinc-900/50 px-6">
-        <div className="mx-auto max-w-6xl flex gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? "border-blue-500 text-blue-400"
-                  : "border-transparent text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {/* ── QUICK PICK ── */}
-        {activeTab === "quickpick" && (
-          <div className="space-y-8">
+      {/* ── Content ── */}
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        {/* ══════════════════════════════════════════════
+            BOONS
+        ══════════════════════════════════════════════ */}
+        {activeTab === "boons" && (
+          <div className="space-y-5">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-1">
-                Choose Your Focus
-              </h2>
-              <p className="text-sm text-zinc-400">
-                Pick a run strategy and we'll auto-select the best Boons,
-                Beacons, and Missions for you.
+              <h2 className="text-sm font-semibold text-slate-100">Boons</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Offered on Blue Beacon completion. Click to pick — selection
+                order sets priority.
               </p>
             </div>
 
-            {/* Focus cards */}
-            <div className="grid gap-4 sm:grid-cols-3">
-              {(Object.entries(focusConfig) as [FocusId, (typeof focusConfig)[FocusId]][]).map(
-                ([id, cfg]) => (
-                  <button
-                    key={id}
-                    onClick={() => applyFocus(id)}
-                    className={`text-left rounded-xl border p-5 transition-all ${
-                      selectedFocus === id
-                        ? "border-blue-500 bg-blue-950/40 ring-1 ring-blue-500"
-                        : "border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:bg-zinc-800"
-                    }`}
-                  >
-                    <div className="text-3xl mb-2">{cfg.emoji}</div>
-                    <div className="font-semibold text-white">{cfg.label}</div>
-                    <p className="text-zinc-400 text-sm mt-1">
-                      {cfg.description}
-                    </p>
-                  </button>
-                )
-              )}
-            </div>
-
-            {/* Focus details */}
-            {selectedFocus && (
-              <div className="space-y-6">
-                {/* Tip banner */}
-                <div className="rounded-xl border border-amber-700/50 bg-amber-950/20 p-4 text-sm text-amber-300">
-                  💡{" "}
-                  <span className="font-medium">Tip:</span>{" "}
-                  {focusConfig[selectedFocus].tip}
-                </div>
-
-                {/* Recommended Boons */}
-                <section>
-                  <h3 className="text-base font-semibold text-white mb-3">
-                    Recommended Boons
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {focusConfig[selectedFocus].boonIds.map((id) => {
-                      const b = boonList.find((x) => x.id === id);
-                      if (!b) return null;
-                      return (
-                        <span
-                          key={id}
-                          className="rounded-full border border-zinc-600 bg-zinc-800 px-3 py-1 text-sm text-zinc-200"
-                        >
-                          {b.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                {/* Recommended Beacons */}
-                <section>
-                  <h3 className="text-base font-semibold text-white mb-3">
-                    Recommended Beacons
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {focusConfig[selectedFocus].beaconIds.map((id) => {
-                      const b = beaconList.find((x) => x.id === id);
-                      if (!b) return null;
-                      return (
-                        <span
-                          key={id}
-                          className="rounded-full border border-zinc-600 bg-zinc-800 px-3 py-1 text-sm text-zinc-200"
-                        >
-                          {b.emoji} {b.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                {/* Core Missions */}
-                <section>
-                  <h3 className="text-base font-semibold text-white mb-3">
-                    Core Missions
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {focusConfig[selectedFocus].missionIds.map((id) => {
-                      const m = missionList.find((x) => x.id === id);
-                      if (!m) return null;
-                      return (
-                        <span
-                          key={id}
-                          className={`rounded-full px-3 py-1 text-sm font-medium ${tierBadge(m.tier)}`}
-                        >
-                          [{m.tier}] {m.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                {/* Nav buttons */}
-                <div className="flex gap-3 flex-wrap">
-                  {(
-                    [
-                      { tab: "boons", label: "View Boons" },
-                      { tab: "beacons", label: "View Beacons" },
-                      { tab: "missions", label: "View Missions" },
-                    ] as { tab: Tab; label: string }[]
-                  ).map(({ tab, label }) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className="rounded-lg bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition-colors"
-                    >
-                      {label} →
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── BOONS ── */}
-        {activeTab === "boons" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h2 className="text-xl font-semibold text-white">Boons</h2>
-                <p className="text-sm text-zinc-400">
-                  Offered on Blue Beacon completion. Click to mark as picked.
-                </p>
-              </div>
-              {selectedBoons.size > 0 && (
-                <span className="rounded-full bg-blue-900/60 border border-blue-700 px-3 py-1 text-sm text-blue-300">
-                  {selectedBoons.size} selected
-                </span>
-              )}
-            </div>
-
-            {/* Category filter */}
-            <div className="flex flex-wrap gap-2">
-              <button
+            {/* Category filters */}
+            <div className="flex flex-wrap gap-1.5">
+              <FilterPill
+                active={boonFilter === "all"}
                 onClick={() => setBoonFilter("all")}
-                className={`rounded-full px-3 py-1 text-sm transition-colors ${
-                  boonFilter === "all"
-                    ? "bg-blue-600 text-white"
-                    : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                }`}
               >
                 All
-              </button>
+              </FilterPill>
               {categoryList.map((cat) => (
-                <button
+                <FilterPill
                   key={cat.id}
+                  active={boonFilter === cat.id}
                   onClick={() => setBoonFilter(cat.id)}
-                  className={`rounded-full px-3 py-1 text-sm transition-colors ${
-                    boonFilter === cat.id
-                      ? "bg-blue-600 text-white"
-                      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                  }`}
                 >
                   {cat.label}
-                </button>
+                </FilterPill>
               ))}
             </div>
 
-            {/* Boon grid */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredBoons.map((boon) => (
-                <button
-                  key={boon.id}
-                  onClick={() =>
-                    toggle(boon.id, selectedBoons, setSelectedBoons)
-                  }
-                  className={`text-left rounded-xl border p-4 transition-all ${
-                    selectedBoons.has(boon.id)
-                      ? "border-blue-500 bg-blue-950/40 ring-1 ring-blue-500"
-                      : "border-zinc-700 bg-zinc-900 hover:border-zinc-500"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="font-semibold text-white text-sm leading-snug">
-                      {boon.name}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${priorityBadge(boon.priority)}`}
-                    >
-                      {boon.priority}
-                    </span>
-                  </div>
-                  <p className="text-xs text-blue-300 mb-1">{boon.effect}</p>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    {boon.description}
-                  </p>
-                  {boon.notes && (
-                    <p className="mt-2 text-xs text-amber-400/80 italic">
-                      {boon.notes}
+            {/* Grid */}
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleBoons.map((boon) => {
+                const r = rank(boon.id, selectedBoons);
+                const selected = r > 0;
+                return (
+                  <button
+                    key={boon.id}
+                    onClick={() =>
+                      toggle(boon.id, selectedBoons, setSelectedBoons)
+                    }
+                    className={`group relative text-left rounded-lg border p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
+                      selected
+                        ? "border-slate-500 bg-slate-800/70 shadow-sm"
+                        : "border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/40"
+                    }`}
+                  >
+                    {/* Selection rank badge */}
+                    {selected && (
+                      <div className="absolute right-3 top-3">
+                        <SelectionBadge n={r} />
+                      </div>
+                    )}
+
+                    <div className={`mb-2 ${selected ? "pr-7" : ""}`}>
+                      <p className="text-sm font-semibold text-slate-100 leading-snug">
+                        {boon.name}
+                      </p>
+                    </div>
+
+                    <p className="mb-1.5 text-xs font-medium text-slate-300">
+                      {boon.effect}
                     </p>
-                  )}
-                  <div className="mt-2 flex gap-1 flex-wrap">
-                    <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                      {boon.type}
-                    </span>
-                    {boon.stackable && (
-                      <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                        stackable
-                      </span>
+                    <p className="text-xs leading-relaxed text-slate-500">
+                      {boon.description}
+                    </p>
+
+                    {boon.notes && (
+                      <p className="mt-2 text-xs italic leading-snug text-amber-500/80">
+                        {boon.notes}
+                      </p>
                     )}
-                  </div>
-                </button>
-              ))}
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <Badge className={gamePriorityStyle(boon.priority)}>
+                        {gamePriorityLabel(boon.priority)}
+                      </Badge>
+                      <Badge className="border-slate-700 text-slate-500">
+                        {boon.type}
+                      </Badge>
+                      {boon.stackable && (
+                        <Badge className="border-slate-700 text-slate-500">
+                          stackable
+                        </Badge>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* ── BEACONS ── */}
+        {/* ══════════════════════════════════════════════
+            BEACONS
+        ══════════════════════════════════════════════ */}
         {activeTab === "beacons" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h2 className="text-xl font-semibold text-white">Beacons</h2>
-                <p className="text-sm text-zinc-400">
-                  Challenge types offered after each completed challenge. Click
-                  to mark as picked.
-                </p>
-              </div>
-              {selectedBeacons.size > 0 && (
-                <span className="rounded-full bg-blue-900/60 border border-blue-700 px-3 py-1 text-sm text-blue-300">
-                  {selectedBeacons.size} selected
-                </span>
-              )}
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100">Beacons</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Challenge types offered after each completed challenge. Click to
+                pick.
+              </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {beaconList.map((beacon) => (
-                <button
-                  key={beacon.id}
-                  onClick={() =>
-                    toggle(beacon.id, selectedBeacons, setSelectedBeacons)
-                  }
-                  className={`text-left rounded-xl border p-4 transition-all ${
-                    selectedBeacons.has(beacon.id)
-                      ? "border-blue-500 bg-blue-950/40 ring-1 ring-blue-500"
-                      : "border-zinc-700 bg-zinc-900 hover:border-zinc-500"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xl">{beacon.emoji}</span>
-                    <span className="font-semibold text-white text-sm leading-snug flex-1">
-                      {beacon.name}
-                    </span>
-                    {beacon.color !== "rainbow" && (
-                      <span
-                        className="h-3 w-3 rounded-full shrink-0 border border-zinc-600"
-                        style={{ backgroundColor: beacon.color }}
-                      />
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {beaconList.map((beacon) => {
+                const r = rank(beacon.id, selectedBeacons);
+                const selected = r > 0;
+                return (
+                  <button
+                    key={beacon.id}
+                    onClick={() =>
+                      toggle(beacon.id, selectedBeacons, setSelectedBeacons)
+                    }
+                    className={`group relative text-left rounded-lg border p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
+                      selected
+                        ? "border-slate-500 bg-slate-800/70 shadow-sm"
+                        : "border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/40"
+                    }`}
+                  >
+                    {selected && (
+                      <div className="absolute right-3 top-3">
+                        <SelectionBadge n={r} />
+                      </div>
                     )}
-                  </div>
-                  <p className="text-xs text-blue-300 mb-1">{beacon.effect}</p>
-                  <p className="text-xs text-zinc-400 leading-relaxed mb-2">
-                    {beacon.description}
-                  </p>
-                  {beacon.tips && beacon.tips.length > 0 && (
-                    <ul className="space-y-1">
-                      {beacon.tips.map((tip: string, i: number) => (
-                        <li key={i} className="text-xs text-amber-400/80">
-                          • {tip}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="mt-2">
-                    <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-                      {beacon.category}
-                    </span>
-                  </div>
-                </button>
-              ))}
+
+                    <div
+                      className={`mb-2 flex items-center gap-2 ${selected ? "pr-7" : ""}`}
+                    >
+                      <span className="text-lg leading-none">
+                        {beacon.emoji}
+                      </span>
+                      <span className="flex-1 text-sm font-semibold leading-snug text-slate-100">
+                        {beacon.name}
+                      </span>
+                      {beacon.color !== "rainbow" && (
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-slate-700"
+                          style={{ backgroundColor: beacon.color }}
+                        />
+                      )}
+                    </div>
+
+                    <p className="mb-1.5 text-xs font-medium text-slate-300">
+                      {beacon.effect}
+                    </p>
+                    <p className="mb-2 text-xs leading-relaxed text-slate-500">
+                      {beacon.description}
+                    </p>
+
+                    {beacon.tips && beacon.tips.length > 0 && (
+                      <ul className="space-y-1">
+                        {beacon.tips.map((tip: string, i: number) => (
+                          <li key={i} className="text-xs text-amber-500/75">
+                            · {tip}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <div className="mt-3">
+                      <Badge className="border-slate-700 text-slate-500">
+                        {beacon.category}
+                      </Badge>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* ── MISSIONS ── */}
+        {/* ══════════════════════════════════════════════
+            MISSIONS
+        ══════════════════════════════════════════════ */}
         {activeTab === "missions" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <h2 className="text-xl font-semibold text-white">Missions</h2>
-                <p className="text-sm text-zinc-400">
-                  Bonus objectives via Grey Beacons. Max 4 per run, stop
-                  appearing after Challenge 30.
-                </p>
-              </div>
-              {selectedMissions.size > 0 && (
-                <span className="rounded-full bg-blue-900/60 border border-blue-700 px-3 py-1 text-sm text-blue-300">
-                  {selectedMissions.size} / 4 selected
-                </span>
-              )}
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100">
+                Missions
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Bonus objectives via Grey Beacons. Max 4 per run — stop
+                appearing after Challenge 30.
+              </p>
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-4">
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs text-zinc-500">Tier:</span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-slate-600">Tier</span>
                 {["all", "S", "A", "B", "C"].map((t) => (
-                  <button
+                  <FilterPill
                     key={t}
+                    active={missionTierFilter === t}
                     onClick={() => setMissionTierFilter(t)}
-                    className={`rounded-full px-3 py-1 text-sm transition-colors ${
-                      missionTierFilter === t
-                        ? "bg-blue-600 text-white"
-                        : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                    }`}
                   >
-                    {t === "all" ? "All" : `${t}-Tier`}
-                  </button>
+                    {t === "all" ? "All" : t}
+                  </FilterPill>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-xs text-zinc-500">Combo:</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-slate-600">Combo</span>
                 {[
                   { id: "all", label: "All" },
                   { id: "flying_chests", label: "🟡 Flying Chests" },
                   { id: "curse_stacking", label: "🟣 Curse Stacking" },
                   { id: "beacon_reroll", label: "🟠 Beacon Reroll" },
                 ].map(({ id, label }) => (
-                  <button
+                  <FilterPill
                     key={id}
+                    active={missionComboFilter === id}
                     onClick={() => setMissionComboFilter(id)}
-                    className={`rounded-full px-3 py-1 text-sm transition-colors ${
-                      missionComboFilter === id
-                        ? "bg-blue-600 text-white"
-                        : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                    }`}
                   >
                     {label}
-                  </button>
+                  </FilterPill>
                 ))}
               </div>
             </div>
 
-            {/* Mission grid */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredMissions.map((mission) => (
-                <button
-                  key={mission.id}
-                  onClick={() =>
-                    toggle(mission.id, selectedMissions, setSelectedMissions)
-                  }
-                  className={`text-left rounded-xl border p-4 transition-all ${
-                    selectedMissions.has(mission.id)
-                      ? "border-blue-500 bg-blue-950/40 ring-1 ring-blue-500"
-                      : "border-zinc-700 bg-zinc-900 hover:border-zinc-500"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="font-semibold text-white text-sm leading-snug">
-                      {mission.name}
-                    </span>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${tierBadge(mission.tier)}`}
+            {/* Grid */}
+            {visibleMissions.length === 0 ? (
+              <EmptyState message="No missions match the current filters." />
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleMissions.map((mission) => {
+                  const r = rank(mission.id, selectedMissions);
+                  const selected = r > 0;
+                  return (
+                    <button
+                      key={mission.id}
+                      onClick={() =>
+                        toggle(
+                          mission.id,
+                          selectedMissions,
+                          setSelectedMissions
+                        )
+                      }
+                      className={`group relative text-left rounded-lg border p-4 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ${
+                        selected
+                          ? "border-slate-500 bg-slate-800/70 shadow-sm"
+                          : "border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/40"
+                      }`}
                     >
-                      {mission.tier}
+                      {selected && (
+                        <div className="absolute right-3 top-3">
+                          <SelectionBadge n={r} />
+                        </div>
+                      )}
+
+                      <div
+                        className={`mb-2 flex items-start gap-2 ${selected ? "pr-7" : ""}`}
+                      >
+                        <span className="flex-1 text-sm font-semibold leading-snug text-slate-100">
+                          {mission.name}
+                        </span>
+                        <Badge className={tierStyle(mission.tier)}>
+                          {mission.tier}
+                        </Badge>
+                      </div>
+
+                      <p className="mb-1.5 text-xs font-medium leading-relaxed text-slate-300">
+                        {mission.effect}
+                      </p>
+                      <p className="mb-2 text-xs leading-relaxed text-slate-500">
+                        {mission.description}
+                      </p>
+
+                      {Array.isArray(mission.combo) &&
+                        mission.combo.length > 0 && (
+                          <div className="mb-2 flex flex-wrap gap-1">
+                            {mission.combo.map((c: string) => (
+                              <Badge
+                                key={c}
+                                className="border-slate-700 text-slate-400"
+                              >
+                                {comboLabel(c)}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                      {mission.tips && mission.tips.length > 0 && (
+                        <ul className="space-y-1">
+                          {mission.tips
+                            .slice(0, 2)
+                            .map((tip: string, i: number) => (
+                              <li
+                                key={i}
+                                className="text-xs text-amber-500/75"
+                              >
+                                · {tip}
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════
+            OVERVIEW
+        ══════════════════════════════════════════════ */}
+        {activeTab === "overview" && (
+          <div className="space-y-8">
+            {/* Overview header */}
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">
+                  Overview
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  All picks in selection-priority order. Export or import as
+                  JSON.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-transparent px-3 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+                >
+                  <svg
+                    className="h-3 w-3"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <path d="M8 2v9M4 7l4 4 4-4M2 13h12" />
+                  </svg>
+                  Import JSON
+                </button>
+                <button
+                  onClick={handleExport}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700"
+                >
+                  <svg
+                    className="h-3 w-3"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <path d="M8 11V2M4 6l4-4 4 4M2 13h12" />
+                  </svg>
+                  Export JSON
+                </button>
+              </div>
+            </div>
+
+            {/* Empty state */}
+            {totalSelected === 0 && (
+              <EmptyState message="Nothing selected yet — head to Boons, Beacons, or Missions to start picking." />
+            )}
+
+            {/* ── Selected Boons ── */}
+            {selectedBoons.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Boons
+                  </h3>
+                  <span className="h-px flex-1 bg-slate-800" />
+                  <span className="text-xs text-slate-600">
+                    {selectedBoons.length} selected
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {selectedBoons.map((id, idx) => {
+                    const b = boonList.find((x) => x.id === id);
+                    if (!b) return null;
+                    return (
+                      <div
+                        key={id}
+                        className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5"
+                      >
+                        <SelectionBadge n={idx + 1} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-100">
+                            {b.name}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {b.effect}
+                          </p>
+                        </div>
+                        <Badge className={gamePriorityStyle(b.priority)}>
+                          {gamePriorityLabel(b.priority)}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ── Selected Beacons ── */}
+            {selectedBeacons.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Beacons
+                  </h3>
+                  <span className="h-px flex-1 bg-slate-800" />
+                  <span className="text-xs text-slate-600">
+                    {selectedBeacons.length} selected
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {selectedBeacons.map((id, idx) => {
+                    const b = beaconList.find((x) => x.id === id);
+                    if (!b) return null;
+                    return (
+                      <div
+                        key={id}
+                        className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5"
+                      >
+                        <SelectionBadge n={idx + 1} />
+                        <span className="text-base leading-none">
+                          {b.emoji}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-100">
+                            {b.name}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {b.effect}
+                          </p>
+                        </div>
+                        {b.color !== "rainbow" && (
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-slate-700"
+                            style={{ backgroundColor: b.color }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ── Selected Missions ── */}
+            {selectedMissions.length > 0 && (
+              <section className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                    Missions
+                  </h3>
+                  <span className="h-px flex-1 bg-slate-800" />
+                  <div className="flex items-center gap-2">
+                    {selectedMissions.length > 4 && (
+                      <Badge className="border-red-800 bg-red-950/40 text-red-400">
+                        ⚠ Over limit
+                      </Badge>
+                    )}
+                    <span className="text-xs text-slate-600">
+                      {selectedMissions.length} / 4 selected
                     </span>
                   </div>
-                  <p className="text-xs text-blue-300 leading-relaxed mb-1">
-                    {mission.effect}
-                  </p>
-                  <p className="text-xs text-zinc-400 leading-relaxed mb-2">
-                    {mission.description}
-                  </p>
-                  {mission.combo && mission.combo.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {mission.combo.map((c: string) => (
-                        <span
-                          key={c}
-                          className="rounded-full bg-zinc-700 px-2 py-0.5 text-xs text-zinc-300"
-                        >
-                          {c === "flying_chests"
-                            ? "🟡 Flying Chests"
-                            : c === "curse_stacking"
-                              ? "🟣 Curse Stacking"
-                              : "🟠 Beacon Reroll"}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {mission.tips && mission.tips.length > 0 && (
-                    <ul className="space-y-1">
-                      {mission.tips.slice(0, 2).map((tip: string, i: number) => (
-                        <li key={i} className="text-xs text-amber-400/80">
-                          • {tip}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </button>
-              ))}
-            </div>
+                </div>
+                <div className="space-y-1.5">
+                  {selectedMissions.map((id, idx) => {
+                    const m = missionList.find((x) => x.id === id);
+                    if (!m) return null;
+                    return (
+                      <div
+                        key={id}
+                        className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5"
+                      >
+                        <SelectionBadge n={idx + 1} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-100">
+                            {m.name}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {m.effect}
+                          </p>
+                        </div>
+                        <Badge className={tierStyle(m.tier)}>{m.tier}</Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </main>
