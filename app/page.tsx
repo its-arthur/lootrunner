@@ -20,7 +20,14 @@ const statCategoryList = statCategories as any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const statList = stats as any[];
 
-type Tab = "boons" | "beacons" | "missions" | "stats" | "overview";
+type Tab = "boons" | "beacons" | "missions" | "stats";
+
+// ── Beacon Combo ─────────────────────────────────────────────────────────────
+interface BeaconCombo {
+  id: string;
+  name: string;
+  beaconIds: string[];
+}
 
 // ── Persistence format ────────────────────────────────────────────────────────
 interface SaveData {
@@ -30,35 +37,10 @@ interface SaveData {
   beacons: string[];
   missions: string[];
   statsInOverview: string[];
+  beaconCombos?: BeaconCombo[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function gamePriorityStyle(priority: string): string {
-  switch (priority) {
-    case "highest":
-      return "text-red-400 border-red-800 bg-red-950/40";
-    case "high":
-      return "text-orange-400 border-orange-800 bg-orange-950/40";
-    case "medium":
-      return "text-yellow-400 border-yellow-800 bg-yellow-950/40";
-    default:
-      return "text-slate-400 border-slate-700 bg-slate-800/40";
-  }
-}
-
-function gamePriorityLabel(priority: string): string {
-  switch (priority) {
-    case "highest":
-      return "Highest";
-    case "high":
-      return "High";
-    case "medium":
-      return "Medium";
-    default:
-      return "Low";
-  }
-}
-
 function downloadJson(data: SaveData) {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json",
@@ -129,12 +111,14 @@ function OverviewCard({
   emptyMessage,
   children,
   className = "",
+  headerAction,
 }: {
   title: string;
   count: number;
   emptyMessage: string;
   children: React.ReactNode;
   className?: string;
+  headerAction?: React.ReactNode;
 }) {
   return (
     <div className={`flex h-full min-h-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm ${className}`.trim()}>
@@ -142,12 +126,15 @@ function OverviewCard({
         <span className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
           {title}
         </span>
-        <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--foreground)]">
-          {count}
-        </span>
+        <div className="flex items-center gap-2">
+          {headerAction}
+          <span className="rounded-md bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--foreground)]">
+            {count}
+          </span>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {count === 0 ? (
+        {count === 0 && !headerAction ? (
           <p className="text-[11px] text-[var(--muted-foreground)]">{emptyMessage}</p>
         ) : (
           children
@@ -172,7 +159,7 @@ function OverviewItemCard({ children, className = "" }: { children: React.ReactN
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("boons");
 
-  // Ordered arrays — index 0 = priority 1
+  // Ordered arrays
   const [selectedBoons, setSelectedBoons] = useState<string[]>([]);
   const [selectedBeacons, setSelectedBeacons] = useState<string[]>([]);
   const [selectedMissions, setSelectedMissions] = useState<string[]>([]);
@@ -182,6 +169,12 @@ export default function Home() {
 
   // Filters
   const [boonFilter, setBoonFilter] = useState("all");
+
+  // Beacon combos
+  const [beaconCombos, setBeaconCombos] = useState<BeaconCombo[]>([]);
+  const [editingComboId, setEditingComboId] = useState<string | null>(null);
+  const [comboNameInput, setComboNameInput] = useState("");
+  const [showCreateCombo, setShowCreateCombo] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -199,6 +192,59 @@ export default function Home() {
     return i === -1 ? 0 : i + 1;
   }
 
+  // ── Beacon Combo helpers ──────────────────────────────────────────────────
+  function createCombo(name: string, beaconIds: string[]) {
+    if (!name.trim() || beaconIds.length === 0) return;
+    const newCombo: BeaconCombo = {
+      id: `combo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: name.trim(),
+      beaconIds: [...beaconIds],
+    };
+    setBeaconCombos([...beaconCombos, newCombo]);
+    setShowCreateCombo(false);
+    setComboNameInput("");
+  }
+
+  function renameCombo(id: string, newName: string) {
+    if (!newName.trim()) return;
+    setBeaconCombos(
+      beaconCombos.map((combo) =>
+        combo.id === id ? { ...combo, name: newName.trim() } : combo
+      )
+    );
+    setEditingComboId(null);
+    setComboNameInput("");
+  }
+
+  function deleteCombo(id: string) {
+    setBeaconCombos(beaconCombos.filter((combo) => combo.id !== id));
+  }
+
+  function startEditCombo(combo: BeaconCombo) {
+    setEditingComboId(combo.id);
+    setComboNameInput(combo.name);
+  }
+
+  function cancelEdit() {
+    setEditingComboId(null);
+    setComboNameInput("");
+    setShowCreateCombo(false);
+  }
+
+  function moveComboUp(index: number) {
+    if (index === 0) return;
+    const newCombos = [...beaconCombos];
+    [newCombos[index - 1], newCombos[index]] = [newCombos[index], newCombos[index - 1]];
+    setBeaconCombos(newCombos);
+  }
+
+  function moveComboDown(index: number) {
+    if (index === beaconCombos.length - 1) return;
+    const newCombos = [...beaconCombos];
+    [newCombos[index], newCombos[index + 1]] = [newCombos[index + 1], newCombos[index]];
+    setBeaconCombos(newCombos);
+  }
+
   // ── Import / Export ───────────────────────────────────────────────────────
   function handleExport() {
     downloadJson({
@@ -208,6 +254,7 @@ export default function Home() {
       beacons: selectedBeacons,
       missions: selectedMissions,
       statsInOverview,
+      beaconCombos,
     });
   }
 
@@ -224,6 +271,9 @@ export default function Home() {
           setSelectedMissions(Array.isArray(data.missions) ? data.missions : []);
           setStatsInOverview(
             Array.isArray(data.statsInOverview) ? data.statsInOverview : []
+          );
+          setBeaconCombos(
+            Array.isArray(data.beaconCombos) ? data.beaconCombos : []
           );
         }
       } catch {
@@ -253,7 +303,6 @@ export default function Home() {
     { id: "beacons", label: "Beacons", count: selectedBeacons.length },
     { id: "missions", label: "Missions", count: selectedMissions.length },
     { id: "stats", label: "Stats", count: statsInOverview.length },
-    { id: "overview", label: "Overview" },
   ];
 
   const totalSelected =
@@ -317,30 +366,211 @@ export default function Home() {
               </button>
             </div>
           </div>
+        </div>
+      </header>
 
-          {/* Tab bar */}
-          <div className="-mb-px flex gap-0">
+      {/* ── Overview Section ── */}
+      <section className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        <div className="flex h-[calc(100vh-14rem)] max-h-[600px] flex-col gap-3">
+          {/* Header: title + actions */}
+          <div className="flex shrink-0 items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--foreground)]">
+                Overview
+              </h2>
+              <p className="text-[11px] text-[var(--muted-foreground)]">
+                Export/import JSON
+              </p>
+            </div>
+          </div>
+
+          {/* Empty state when nothing selected */}
+          {totalSelected === 0 && statsInOverview.length === 0 && beaconCombos.length === 0 && (
+            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)]">
+              <p className="text-center text-sm text-[var(--muted-foreground)]">
+                Nothing selected — pick Boons, Beacons, Missions, or Stats in their tabs.
+              </p>
+            </div>
+          )}
+
+          {/* Bento grid: Row1 Beacons(1) | Boons(2) | Row2 Missions(2) | Stats(1) */}
+          {(totalSelected > 0 || statsInOverview.length > 0 || beaconCombos.length > 0) && (
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-3 sm:grid-rows-2">
+              {/* Beacons — top left (1 cell) */}
+              <OverviewCard
+                title="Beacons"
+                count={beaconCombos.length > 0 ? beaconCombos.length : selectedBeacons.length}
+                emptyMessage={beaconCombos.length === 0 ? "No beacons selected" : "No beacon combos"}
+              >
+                <div className="space-y-3">
+                  {/* Beacon Combos - show all combos in order */}
+                  {beaconCombos.length > 0 ? (
+                    beaconCombos.map((combo) => (
+                      <div key={combo.id} className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                          {combo.name}
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {combo.beaconIds.map((id) => {
+                            const b = beaconList.find((x) => x.id === id);
+                            if (!b) return null;
+                            return (
+                              <OverviewItemCard
+                                key={id}
+                                className="inline-flex items-center gap-1"
+                              >
+                                <span className="text-sm leading-none">{b.emoji}</span>
+                                <span className="text-[10px] font-medium text-[var(--foreground)]">{b.name}</span>
+                              </OverviewItemCard>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    /* Fallback: show all selected beacons if no combos exist */
+                    selectedBeacons.length > 0 && (
+                      <ul className="space-y-1.5 text-[11px]">
+                        {selectedBeacons.map((id, idx) => {
+                          const b = beaconList.find((x) => x.id === id);
+                          if (!b) return null;
+                          return (
+                            <li key={id}>
+                              <OverviewItemCard>
+                                <div className="flex items-center gap-2">
+                                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--accent)] font-mono text-[10px] font-semibold text-[var(--foreground)]">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="shrink-0 text-base leading-none">{b.emoji}</span>
+                                  <span className="min-w-0 truncate font-medium text-[var(--foreground)]">{b.name}</span>
+                                </div>
+                              </OverviewItemCard>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )
+                  )}
+                </div>
+              </OverviewCard>
+
+              {/* Boons — top right (spans 2 cols) */}
+              <OverviewCard
+                title="Boons"
+                count={selectedBoons.length}
+                emptyMessage="No boons selected"
+                className="sm:col-span-2"
+              >
+                <ul className="space-y-1.5 text-[11px]">
+                  {selectedBoons.map((id, idx) => {
+                    const b = boonList.find((x) => x.id === id);
+                    if (!b) return null;
+                    return (
+                      <li key={id}>
+                        <OverviewItemCard>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className={`min-w-0 flex-1 truncate font-medium ${b.nameColor ?? "text-[var(--foreground)]"}`}>{b.name}</span>
+                            </div>
+                            <p className="text-[10px] text-[var(--muted-foreground)]">
+                              {b.description}
+                            </p>
+                          </div>
+                        </OverviewItemCard>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </OverviewCard>
+
+              {/* Missions — bottom left (spans 2 cols) */}
+              <OverviewCard
+                title="Missions"
+                count={selectedMissions.length}
+                emptyMessage="No missions selected"
+                className="sm:col-span-2"
+              >
+                <div className="space-y-1.5">
+                  {selectedMissions.length > 4 && (
+                    <p className="text-[10px] text-amber-500">Max 4 per run — you have {selectedMissions.length}</p>
+                  )}
+                  <ul className="space-y-1.5 text-[11px]">
+                    {selectedMissions.map((id, idx) => {
+                      const m = missionList.find((x) => x.id === id);
+                      if (!m) return null;
+                      return (
+                        <li key={id}>
+                          <OverviewItemCard>
+                            <div className="flex items-center gap-2">
+                              <span className={`min-w-0 flex-1 truncate font-medium ${m.nameColor ?? "text-[var(--foreground)]"}`}>{m.name}</span>
+                            </div>
+                          </OverviewItemCard>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </OverviewCard>
+
+              {/* Stats — bottom right (1 cell), grouped by category */}
+              <OverviewCard
+                title="Stats"
+                count={statsInOverview.length}
+                emptyMessage="None selected for overview"
+              >
+                <div className="space-y-3">
+                  {statCategoryList.map((cat) => {
+                    const statsInCategory = statsInOverview.filter((id) => {
+                      const s = statList.find((x) => x.id === id);
+                      return s && s.category === cat.id;
+                    });
+                    if (statsInCategory.length === 0) return null;
+                    return (
+                      <div key={cat.id} className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
+                          {cat.label}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {statsInCategory.map((id) => {
+                            const s = statList.find((x) => x.id === id);
+                            if (!s) return null;
+                            return (
+                              <OverviewItemCard key={id} className="inline-flex w-fit">
+                                <span className="text-[11px] font-medium text-[var(--foreground)]">{s.name}</span>
+                              </OverviewItemCard>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </OverviewCard>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Tab bar ── */}
+      <div className="bg-[var(--background)]">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 border-b border-[var(--border)] ">
+          <div className="flex h-10 items-center gap-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none ${
+                className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-[var(--background)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${
                   activeTab === tab.id
-                    ? "text-slate-100 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-slate-100"
-                    : "text-slate-500 hover:text-slate-300"
+                    ? "bg-[var(--background)] text-[var(--foreground)] shadow-sm"
+                    : "text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
                 }`}
               >
                 {tab.label}
-                {typeof tab.count === "number" && tab.count > 0 && (
-                  <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-slate-700 px-1 text-[10px] font-semibold text-slate-300">
-                    {tab.count}
-                  </span>
-                )}
               </button>
             ))}
           </div>
         </div>
-      </header>
+      </div>
 
       {/* ── Content ── */}
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -352,8 +582,7 @@ export default function Home() {
             <div>
               <h2 className="text-sm font-semibold text-slate-100">Boons</h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                Offered on Blue Beacon completion. Click to pick — selection
-                order sets priority.
+                Offered on Blue Beacon completion. Click to pick.
               </p>
             </div>
 
@@ -413,29 +642,20 @@ export default function Home() {
                           >
                             {selected && (
                               <div className="absolute right-3 top-3">
-                                <SelectionBadge n={r} />
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                                  ✓
+                                </span>
                               </div>
                             )}
                             <div className={`mb-2 ${selected ? "pr-7" : ""}`}>
-                              <p className="text-sm font-semibold text-slate-100 leading-snug">
+                              <p className={`text-sm font-semibold leading-snug ${boon.nameColor ?? "text-slate-100"}`}>
                                 {boon.name}
                               </p>
                             </div>
-                            <p className="mb-1.5 text-xs font-medium text-slate-300">
-                              {boon.effect}
-                            </p>
                             <p className="text-xs leading-relaxed text-slate-500">
                               {boon.description}
                             </p>
-                            {boon.notes && (
-                              <p className="mt-2 text-xs italic leading-snug text-amber-500/80">
-                                {boon.notes}
-                              </p>
-                            )}
                             <div className="mt-3 flex flex-wrap gap-1.5">
-                              <Badge className={gamePriorityStyle(boon.priority)}>
-                                {gamePriorityLabel(boon.priority)}
-                              </Badge>
                               <Badge className="border-slate-700 text-slate-500">
                                 {boon.type}
                               </Badge>
@@ -466,6 +686,227 @@ export default function Home() {
                 Challenge types offered after each completed challenge. Click to
                 pick.
               </p>
+            </div>
+
+            {/* Beacon Combos Section */}
+            <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-200">Beacon Combos</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Save and quickly apply beacon combinations
+                  </p>
+                </div>
+                {!showCreateCombo && (
+                  <div className="flex items-center gap-2">
+                    {selectedBeacons.length > 0 && (
+                      <button
+                        onClick={() => setSelectedBeacons([])}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-transparent px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+                        title="Clear selection"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowCreateCombo(true);
+                        setComboNameInput("");
+                      }}
+                      disabled={selectedBeacons.length === 0}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg
+                        className="h-3 w-3"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <path d="M8 2v12M2 8h12" />
+                      </svg>
+                      Create Combo
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Create Combo Form */}
+              {showCreateCombo && (
+                <div className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-800/50 p-2.5">
+                  <input
+                    type="text"
+                    value={comboNameInput}
+                    onChange={(e) => setComboNameInput(e.target.value)}
+                    placeholder="Combo name..."
+                    className="flex-1 rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-slate-600 focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        createCombo(comboNameInput, selectedBeacons);
+                      } else if (e.key === "Escape") {
+                        cancelEdit();
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => createCombo(comboNameInput, selectedBeacons)}
+                    disabled={!comboNameInput.trim() || selectedBeacons.length === 0}
+                    className="rounded-md border border-slate-600 bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={cancelEdit}
+                    className="rounded-md border border-slate-700 bg-transparent px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* Combos List */}
+              {beaconCombos.length > 0 && (
+                <div className="space-y-2">
+                  {beaconCombos.map((combo, index) => (
+                    <div
+                      key={combo.id}
+                      className="flex items-center gap-2 rounded-md border border-slate-800 bg-slate-800/30 p-2.5"
+                    >
+                      {editingComboId === combo.id ? (
+                        <>
+                          <input
+                            type="text"
+                            value={comboNameInput}
+                            onChange={(e) => setComboNameInput(e.target.value)}
+                            className="flex-1 rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-slate-600 focus:outline-none"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                renameCombo(combo.id, comboNameInput);
+                              } else if (e.key === "Escape") {
+                                cancelEdit();
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => renameCombo(combo.id, comboNameInput)}
+                            disabled={!comboNameInput.trim()}
+                            className="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-600 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="rounded-md border border-slate-700 bg-transparent px-2 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {/* Reorder buttons */}
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => moveComboUp(index)}
+                              disabled={index === 0}
+                              className="rounded border border-slate-700 bg-transparent p-0.5 text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Move up"
+                            >
+                              <svg
+                                className="h-3 w-3"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                              >
+                                <path d="M12 10L8 6L4 10" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => moveComboDown(index)}
+                              disabled={index === beaconCombos.length - 1}
+                              className="rounded border border-slate-700 bg-transparent p-0.5 text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Move down"
+                            >
+                              <svg
+                                className="h-3 w-3"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                              >
+                                <path d="M4 6L8 10L12 6" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-slate-200">
+                                {combo.name}
+                              </span>
+                              <span className="text-[10px] text-slate-500">
+                                ({combo.beaconIds.length} beacons)
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {combo.beaconIds.slice(0, 5).map((id) => {
+                                const b = beaconList.find((x) => x.id === id);
+                                return b ? (
+                                  <span key={id} className="text-base leading-none">
+                                    {b.emoji}
+                                  </span>
+                                ) : null;
+                              })}
+                              {combo.beaconIds.length > 5 && (
+                                <span className="text-[10px] text-slate-500">
+                                  +{combo.beaconIds.length - 5}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => startEditCombo(combo)}
+                            className="rounded-md border border-slate-700 bg-transparent px-2 py-1 text-xs font-medium text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+                            title="Rename"
+                          >
+                            <svg
+                              className="h-3.5 w-3.5"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            >
+                              <path d="M11.5 2.5a2.121 2.121 0 0 1 3 3L6.5 13.5H2.5v-4L9.5 2.5Z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => deleteCombo(combo.id)}
+                            className="rounded-md border border-slate-700 bg-transparent px-2 py-1 text-xs font-medium text-red-400 transition-colors hover:border-red-600 hover:bg-red-950/20"
+                            title="Delete"
+                          >
+                            <svg
+                              className="h-3.5 w-3.5"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                            >
+                              <path d="M2 4h12M5.5 4V3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1M6 7.5v5M10 7.5v5M3 4l1 10a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-10" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {beaconCombos.length === 0 && !showCreateCombo && (
+                <p className="text-[11px] text-slate-500">
+                  No combos yet. Select beacons and create your first combo!
+                </p>
+              )}
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -577,7 +1018,9 @@ export default function Home() {
                     >
                       {selected && (
                         <div className="absolute right-3 top-3">
-                          <SelectionBadge n={r} />
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                            ✓
+                          </span>
                         </div>
                       )}
                       <div
@@ -702,160 +1145,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════
-            OVERVIEW — single-screen dashboard
-        ══════════════════════════════════════════════ */}
-        {activeTab === "overview" && (
-          <div className="flex h-[calc(100vh-8rem)] max-h-[720px] flex-col gap-3">
-            {/* Header: title + actions */}
-            <div className="flex shrink-0 items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-[var(--foreground)]">
-                  Overview
-                </h2>
-                <p className="text-[11px] text-[var(--muted-foreground)]">
-                  Priority order · Export/import JSON
-                </p>
-              </div>
-            </div>
-
-            {/* Empty state when nothing selected */}
-            {totalSelected === 0 && statsInOverview.length === 0 && (
-              <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)]">
-                <p className="text-center text-sm text-[var(--muted-foreground)]">
-                  Nothing selected — pick Boons, Beacons, Missions, or Stats in their tabs.
-                </p>
-              </div>
-            )}
-
-            {/* Bento grid: Row1 Beacons(1) | Boons(2) | Row2 Missions(2) | Stats(1) */}
-            {(totalSelected > 0 || statsInOverview.length > 0) && (
-              <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-3 sm:grid-rows-2">
-                {/* Beacons — top left (1 cell) */}
-                <OverviewCard
-                  title="Beacons"
-                  count={selectedBeacons.length}
-                  emptyMessage="No beacons selected"
-                >
-                  <ul className="space-y-1.5 text-[11px]">
-                    {selectedBeacons.map((id, idx) => {
-                      const b = beaconList.find((x) => x.id === id);
-                      if (!b) return null;
-                      return (
-                        <li key={id}>
-                          <OverviewItemCard>
-                            <div className="flex items-center gap-2">
-                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--accent)] font-mono text-[10px] font-semibold text-[var(--foreground)]">
-                                {idx + 1}
-                              </span>
-                              <span className="shrink-0 text-base leading-none">{b.emoji}</span>
-                              <span className="min-w-0 truncate font-medium text-[var(--foreground)]">{b.name}</span>
-                            </div>
-                          </OverviewItemCard>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </OverviewCard>
-
-                {/* Boons — top right (spans 2 cols) */}
-                <OverviewCard
-                  title="Boons"
-                  count={selectedBoons.length}
-                  emptyMessage="No boons selected"
-                  className="sm:col-span-2"
-                >
-                  <ul className="space-y-1.5 text-[11px]">
-                    {selectedBoons.map((id, idx) => {
-                      const b = boonList.find((x) => x.id === id);
-                      if (!b) return null;
-                      return (
-                        <li key={id}>
-                          <OverviewItemCard>
-                            <div className="flex items-center gap-2">
-                              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--accent)] font-mono text-[10px] font-semibold text-[var(--foreground)]">
-                                {idx + 1}
-                              </span>
-                              <span className="min-w-0 flex-1 truncate font-medium text-[var(--foreground)]">{b.name}</span>
-                              <Badge className={gamePriorityStyle(b.priority)}>{gamePriorityLabel(b.priority)}</Badge>
-                            </div>
-                          </OverviewItemCard>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </OverviewCard>
-
-                {/* Missions — bottom left (spans 2 cols) */}
-                <OverviewCard
-                  title="Missions"
-                  count={selectedMissions.length}
-                  emptyMessage="No missions selected"
-                  className="sm:col-span-2"
-                >
-                  <div className="space-y-1.5">
-                    {selectedMissions.length > 4 && (
-                      <p className="text-[10px] text-amber-500">Max 4 per run — you have {selectedMissions.length}</p>
-                    )}
-                    <ul className="space-y-1.5 text-[11px]">
-                      {selectedMissions.map((id, idx) => {
-                        const m = missionList.find((x) => x.id === id);
-                        if (!m) return null;
-                        return (
-                          <li key={id}>
-                            <OverviewItemCard>
-                              <div className="flex items-center gap-2">
-                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[var(--accent)] font-mono text-[10px] font-semibold text-[var(--foreground)]">
-                                  {idx + 1}
-                                </span>
-                                <span className={`min-w-0 flex-1 truncate font-medium ${m.nameColor ?? "text-[var(--foreground)]"}`}>{m.name}</span>
-                              </div>
-                            </OverviewItemCard>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                </OverviewCard>
-
-                {/* Stats — bottom right (1 cell), grouped by category */}
-                <OverviewCard
-                  title="Stats"
-                  count={statsInOverview.length}
-                  emptyMessage="None selected for overview"
-                >
-                  <div className="space-y-3">
-                    {statCategoryList.map((cat) => {
-                      const statsInCategory = statsInOverview.filter((id) => {
-                        const s = statList.find((x) => x.id === id);
-                        return s && s.category === cat.id;
-                      });
-                      if (statsInCategory.length === 0) return null;
-                      return (
-                        <div key={cat.id} className="space-y-1.5">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                            {cat.label}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {statsInCategory.map((id) => {
-                              const s = statList.find((x) => x.id === id);
-                              if (!s) return null;
-                              return (
-                                <OverviewItemCard key={id} className="inline-flex w-fit">
-                                  <span className="text-[11px] font-medium text-[var(--foreground)]">{s.name}</span>
-                                </OverviewItemCard>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </OverviewCard>
-              </div>
-            )}
-          </div>
-        )}
       </main>
     </div>
   );
